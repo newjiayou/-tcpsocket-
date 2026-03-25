@@ -8,26 +8,22 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # 查找 Qt6 组件
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql )
 
-# 1. 添加可执行文件 (仅包含 main.cpp)
+# 1. 先定义可执行程序 (只放 C++ 源文件)
 qt_add_executable(appQmlChatApp
     main.cpp
+    chatclient.h chatclient.cpp
+    chatmodel.h chatmodel.cpp
 )
 
-# 2. 定义 QML 模块
-# 注意：ChatClient 和 chatmodel 必须放在这里，因为它们用了 QML_ELEMENT
-qt_add_qml_module(appQmlChatApp
-    URI ChatApp
-    VERSION 1.0
-    QML_FILES
-        main.qml
+# 2. 将资源直接附加到目标程序 (这是 Qt6 的正确语法，解决 // 报错的核心)
+qt_add_resources(appQmlChatApp "app_resources"
+    PREFIX "/"
+    FILES
+        Main.qml
         chat.qml
         regist.qml
-    SOURCES
-        ChatClient.h ChatClient.cpp
-        chatmodel.h chatmodel.cpp
-    RESOURCES
         logintest.jpg
 )
 

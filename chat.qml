@@ -32,7 +32,7 @@ Page {
         Qt.callLater(listView.positionViewAtEnd);
 
         // 自動連接到本地服務器
-        chatClient.connectToServer("127.0.0.1", 12345);
+        chatClient.connectToServer("192.168.56.101", 12345);
     }
 
     ColumnLayout {

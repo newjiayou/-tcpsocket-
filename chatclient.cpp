@@ -4,12 +4,12 @@
 #include <QDebug>
 #include <QDir>
 #include <QDataStream>
-
+#include <QNetworkProxy> // <--- 必须添加这个头文件
 ChatClient::ChatClient(QObject *parent) : QObject(parent), m_socket(new QTcpSocket(this))
 {
     initDatabase();
     m_chatModel = new chatmodel(this);  // 创建 model 实例
-
+    m_socket->setProxy(QNetworkProxy::NoProxy);
     // 1. 初始化重連計時器
     m_currentReconnectDelay = 1000; // 初始重连延迟设为 1 秒 (1000ms)
     m_reconnectTimer = new QTimer(this);
@@ -62,40 +62,46 @@ void ChatClient::initDatabase()
     }
 }
 
+// chatclient.cpp
 void ChatClient::connectToServer(const QString &ip, quint16 port) {
     m_serverIp = ip;
     m_serverPort = port;
-    if (m_socket->state() != QAbstractSocket::ConnectedState) {
-        m_socket->connectToHost(ip, port);
-    }
-}
 
+    // 【关键修复】强制断开，并**同步等待**进入未连接状态
+    if (m_socket->state() != QAbstractSocket::UnconnectedState) {
+        m_socket->abort();
+        m_socket->waitForDisconnected(100); // 等待断开完成
+    }
+
+    qDebug() << "正在连接至虚拟机:" << ip << ":" << port;
+    m_socket->connectToHost(ip, port);
+}
 void ChatClient::sendMessage(const QString &message,const QString &target) {
     if (m_socket->state() == QAbstractSocket::ConnectedState) {
         QJsonObject json;
         json["sender"] = m_currentUser;
         json["message"] = message;
         json["target"]=target;
-        // 使用换行符分割 JSON 消息，防止粘包
-        QByteArray data = QJsonDocument(json).toJson(QJsonDocument::Compact) ;
+
+        QByteArray data = QJsonDocument(json).toJson(QJsonDocument::Compact);
         QByteArray packet;
         QDataStream out(&packet, QIODevice::WriteOnly);
-        out.setVersion(QDataStream::Qt_6_2); // 确保版本一致
+        out.setVersion(QDataStream::Qt_6_2);
 
-        quint16 messageType =1 ;//消息类型
-        quint32 totalLength=sizeof(quint32)+sizeof(quint16)+ data.size();
-        out<<totalLength;
-        out<<messageType;
-        packet.append(data)   ;
+        quint16 messageType = 1;
+        quint32 totalLength = sizeof(quint32) + sizeof(quint16) + data.size();
+        out << totalLength;
+        out << messageType;
+
+        // ✅ 还原成你原本正确的写法！
+        packet.append(data);
 
         m_socket->write(packet);
 
-        // 保存并显示自己的消息
         m_chatModel->append(m_currentUser, message, true);
         saveMessageToDb(m_currentUser,target,message);
     }
 }
-
 void ChatClient::onReadyRead() {
     m_buffer.append(m_socket->readAll());
 
@@ -218,33 +224,26 @@ void ChatClient::onConnected() {
 
     QJsonObject json;
     json["sender"] = m_currentUser;
-    json["message"] = ""; // 或者是你要发的其他信息
+    json["message"] = "";
     json["target"] = "";
 
-    // 1. 先生成 JSON 数据
     QByteArray data = QJsonDocument(json).toJson(QJsonDocument::Compact);
-
-    // 2. 正确计算总长度：长度字段(4) + 类型字段(2) + 数据体长度
     quint16 messageType = 3;
-    quint32 totalLength = sizeof(quint32) + sizeof(quint16) + data.size(); // 必须用 data.size()
+    quint32 totalLength = sizeof(quint32) + sizeof(quint16) + data.size();
 
-    // 3. 写入二进制头部
     out << totalLength;
     out << messageType;
 
-    // 4. 将 JSON 数据追加到包体
+    // ✅ 还原成你原本正确的写法！
     packet.append(data);
 
-    // 5. 发送
     m_socket->write(packet);
 
-    m_socket->write(packet);
-    m_currentReconnectDelay = 1000; // 重置为 1 秒
+    m_currentReconnectDelay = 1000;
     qDebug() << "✅ 連線成功！重連延遲已重置為初始值。";
 
-    // ✅ 新增：连接成功后，启动心跳机制
-    m_heartbeatTimer->start(10000);        // 每 10 秒发送一次心跳
-    m_heartbeatTimeoutTimer->start(30000); // 启动 30 秒的超时倒计时
+    m_heartbeatTimer->start(10000);
+    m_heartbeatTimeoutTimer->start(30000);
     qDebug() << "❤️ 心跳机制已启动。";
 }
 void ChatClient::onDisconnected() {
@@ -281,8 +280,8 @@ void ChatClient::attemptReconnection()
     // ✅ 启动下一次的重连定时器。
     // 如果刚才的 connectToServer 成功了，onConnected() 会把这个定时器停掉。
     // 如果一直没连上，这个定时器就会在新的、更长的时间后再次触发本函数。
-    qDebug() << "如果本次失敗，下次將在" << m_currentReconnectDelay / 1000.0 << "秒後重試...";
-    m_reconnectTimer->start(m_currentReconnectDelay);
+    // qDebug() << "如果本次失敗，下次將在" << m_currentReconnectDelay / 1000.0 << "秒後重試...";
+    // m_reconnectTimer->start(m_currentReconnectDelay);
 }
 
 void ChatClient::sendHeartbeat()
@@ -313,7 +312,8 @@ void ChatClient::onHeartbeatTimeout()
 
 void ChatClient::onErrorOccurred(QAbstractSocket::SocketError socketError) {
     qDebug() << "❌ Socket 错误代码:" << socketError;
-
+    qDebug() << "❌ 真实错误：" << m_socket->errorString();
+    qDebug() << "❌ Socket 错误代码:" << socketError;
     // 只有在连接相关错误时，才启动重连
     if (socketError == QAbstractSocket::ConnectionRefusedError ||
         socketError == QAbstractSocket::HostNotFoundError ||

@@ -23,7 +23,8 @@ int main(int argc, char *argv[])
     // 【修改 2】：不要在这里 new chatmodel，直接从 chatClient 获取，保证全局只有1个 Model
     engine.rootContext()->setContextProperty("chatModel", chatClient.chatModel());
 
-    const QUrl url(u"qrc:/ChatApp/main.qml"_qs);
+    // [FIXED] 修正了 QML 文件的资源路径
+    const QUrl url(u"qrc:/Main.qml"_qs);
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [url](QObject *obj, const QUrl &objUrl) {

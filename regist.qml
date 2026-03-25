@@ -42,22 +42,29 @@ Page {
         }
 
         Button {
-            text: "登录"
-            Layout.fillWidth: true
-            highlighted: true // 按钮高亮样式
+                    text: "登录"
+                    Layout.fillWidth: true
+                    highlighted: true
 
-            onClicked: {
-                // 简单的逻辑判断
-                if(usernameField.text === "") {
-                    console.log("请输入用户名")
-                    return
+                    onClicked: {
+                        // 1. 去除前后空格
+                        let uname = usernameField.text.trim()
+                        if(uname === "") {
+                            console.log("请输入用户名")
+                            return
+                        }
+
+                        // 2. 赋值当前用户
+                        chatClient.currentUser = uname
+
+                        // 3. 核心跳转：使用 StackView 的附加属性，并使用绝对的 qrc 路径
+                        if (loginPage.StackView.view) {
+                            // 使用 qrc:/ 绝对路径最稳妥，且确保大小写与实际文件名完全一致！
+                            loginPage.StackView.view.push("qrc:/chat.qml")
+                        } else {
+                            console.error("无法找到 StackView 容器！")
+                        }
+                    }
                 }
-                chatClient.currentUser =usernameField.text
-                // --- 核心跳转代码 ---
-                // push(页面文件路径, {属性传参})
-                // StackView.view 获取当前页面所在的 StackView
-                loginPage.StackView.view.push("chat.qml")
-            }
-        }
     }
 }
